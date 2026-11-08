@@ -22,7 +22,7 @@ inputs:
     required: false
     default: invariants
   snapshot:
-    description: Fork mode. Path to a ledger snapshot (stellar snapshot create) to fuzz real state.
+    description: Fork mode. Path to a ledger snapshot (stellar snapshot create) to fuzz real deployed state.
     required: false
     default: ""
   working-directory:
@@ -38,11 +38,7 @@ runs:
         workspaces: ${{ inputs.working-directory }} -> target
     - name: Shake the contracts
       shell: bash
-      snapshot:
-    description: Fork mode. Path to a ledger snapshot (stellar snapshot create) to fuzz real state.
-    required: false
-    default: ""
-  working-directory: ${{ inputs.working-directory }}
+      working-directory: ${{ inputs.working-directory }}
       env:
         SOROQUAKE_TOKEN: ${{ inputs.token }}
         SOROQUAKE_API: ${{ inputs.api }}
