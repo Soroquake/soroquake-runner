@@ -162,8 +162,19 @@ pub fn run_with<H: Harness>(h: H, cfg: Config) -> Report {
         cfg.max_steps
     );
 
+    let fork = crate::fork::Fork::from_env();
+    if let Some(f) = &fork {
+        println!(
+            "soroquake: fork mode · {} ledger {} · {} entries · {}",
+            f.network,
+            f.ledger,
+            f.entries,
+            f.contracts.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join(", ")
+        );
+    }
+
     #[cfg(feature = "report")]
-    let reporter = crate::report::Reporter::start(&cfg, &seed_hex, invariants.len());
+    let reporter = crate::report::Reporter::start(&cfg, &seed_hex, invariants.len(), fork.as_ref());
 
     let started = Instant::now();
 

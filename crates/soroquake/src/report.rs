@@ -16,7 +16,7 @@ pub(crate) struct Reporter {
 }
 
 impl Reporter {
-    pub(crate) fn start(cfg: &Config, seed: &str, invariants: usize) -> Self {
+    pub(crate) fn start(cfg: &Config, seed: &str, invariants: usize, fork: Option<&crate::fork::Fork>) -> Self {
         let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(10)).build();
         let mut r = Reporter { agent, api: cfg.api.clone(), auth: format!("Bearer {}", cfg.token), campaign: None };
         if cfg.token.is_empty() {
@@ -29,6 +29,7 @@ impl Reporter {
             "seed": seed,
             "invariants": invariants,
             "budget_s": cfg.time.as_secs(),
+            "snapshot": fork.map(|f| f.to_json()),
         });
         match r.post("/v1/ingest/campaigns", body) {
             Ok(v) => {

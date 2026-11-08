@@ -21,6 +21,10 @@ inputs:
     description: Cargo package that holds the Soroquake harness tests.
     required: false
     default: invariants
+  snapshot:
+    description: Fork mode. Path to a ledger snapshot (stellar snapshot create) to fuzz real state.
+    required: false
+    default: ""
   working-directory:
     description: Directory of the Cargo workspace.
     required: false
@@ -34,11 +38,16 @@ runs:
         workspaces: ${{ inputs.working-directory }} -> target
     - name: Shake the contracts
       shell: bash
-      working-directory: ${{ inputs.working-directory }}
+      snapshot:
+    description: Fork mode. Path to a ledger snapshot (stellar snapshot create) to fuzz real state.
+    required: false
+    default: ""
+  working-directory: ${{ inputs.working-directory }}
       env:
         SOROQUAKE_TOKEN: ${{ inputs.token }}
         SOROQUAKE_API: ${{ inputs.api }}
         SOROQUAKE_TIME: ${{ inputs.time }}
+        SOROQUAKE_SNAPSHOT: ${{ inputs.snapshot }}
       run: |
         profile=release
         grep -q '^\[profile.fuzz\]' Cargo.toml && profile=fuzz

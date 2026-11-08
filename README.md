@@ -43,6 +43,14 @@ classes (share inflation, rounding direction, allowance overspend and more),
 then mutating them. Implement `Harness::lab_op` to map the generic
 `LabAction`s to calls on your contracts; cases you can't map are skipped.
 
+## Fork mode
+
+Fuzz real deployed state. Snapshot your contracts with
+`stellar snapshot create --address C... --network testnet --out snapshots/testnet.json`,
+add `snapshots/testnet.meta.json` naming contracts and actors, and pass
+`snapshot: snapshots/testnet.json` to the action (or set `SOROQUAKE_SNAPSHOT`).
+Use `soroquake::Fork` in your harness for the real addresses.
+
 Settings come from the environment: `SOROQUAKE_TIME`, `SOROQUAKE_SEED`
 (replay a campaign), `SOROQUAKE_STEPS`, `SOROQUAKE_TOKEN`, `SOROQUAKE_API`.
 

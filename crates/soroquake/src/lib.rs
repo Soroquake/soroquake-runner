@@ -10,6 +10,7 @@
 pub mod campaign;
 pub mod check;
 pub mod config;
+pub mod fork;
 pub mod lab;
 #[cfg(feature = "report")]
 mod report;
@@ -18,6 +19,7 @@ pub mod rng;
 pub use campaign::{run, Failure, Harness, Invariant, Report, Step};
 pub use check::Check;
 pub use config::Config;
+pub use fork::Fork;
 pub use lab::{Actor, LabAction, LabCase, LabResult, LabStatus};
 pub use rng::SeededRng;
 
