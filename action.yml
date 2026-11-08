@@ -1,0 +1,45 @@
+name: Soroquake
+description: Stateful fuzzing and invariant testing for Soroban smart contracts, with live results in the Soroquake dashboard.
+branding:
+  icon: activity
+  color: yellow
+
+inputs:
+  token:
+    description: Project upload token (store it as the SOROQUAKE_TOKEN secret). Without it, results stay in the job log.
+    required: false
+    default: ""
+  api:
+    description: Soroquake API base URL.
+    required: false
+    default: ""
+  time:
+    description: How long to fuzz, e.g. 120, 5m, 1h.
+    required: false
+    default: "120"
+  package:
+    description: Cargo package that holds the Soroquake harness tests.
+    required: false
+    default: invariants
+  working-directory:
+    description: Directory of the Cargo workspace.
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: ${{ inputs.working-directory }} -> target
+    - name: Shake the contracts
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SOROQUAKE_TOKEN: ${{ inputs.token }}
+        SOROQUAKE_API: ${{ inputs.api }}
+        SOROQUAKE_TIME: ${{ inputs.time }}
+      run: |
+        profile=release
+        grep -q '^\[profile.fuzz\]' Cargo.toml && profile=fuzz
+        cargo test --profile "$profile" -p "${{ inputs.package }}" -- --nocapture --test-threads 1
