@@ -56,7 +56,14 @@ impl Fork {
     /// The snapshot named by `SOROQUAKE_SNAPSHOT`, if set.
     pub fn from_env() -> Option<Fork> {
         let path = std::env::var("SOROQUAKE_SNAPSHOT").ok().filter(|p| !p.trim().is_empty())?;
-        match Fork::load(path.trim()) {
+        let path = path.trim().to_string();
+        // cargo runs tests from the package directory; accept paths relative to
+        // the repository root too by searching parent directories.
+        let resolved = std::env::current_dir()
+            .ok()
+            .and_then(|cwd| cwd.ancestors().map(|d| d.join(&path)).find(|p| p.is_file()))
+            .unwrap_or_else(|| PathBuf::from(&path));
+        match Fork::load(&resolved) {
             Ok(f) => Some(f),
             Err(e) => panic!("soroquake: couldn't load snapshot {path}: {e}"),
         }
