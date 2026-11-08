@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Nishu0/soroquake-runner@main
+      - uses: Soroquake/soroquake-runner@main
         with:
           token: ${{ secrets.SOROQUAKE_TOKEN }}
           api: ${{ vars.SOROQUAKE_API }}
@@ -33,7 +33,7 @@ and `invariants`. Call `soroquake::run(YourHarness)` from a `#[test]`.
 
 ```toml
 [dev-dependencies]
-soroquake = { git = "https://github.com/Nishu0/soroquake-runner", branch = "main" }
+soroquake = { git = "https://github.com/Soroquake/soroquake-runner", branch = "main" }
 ```
 
 ## Replay lab
