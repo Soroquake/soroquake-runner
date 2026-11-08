@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::check::Check;
 use crate::config::Config;
+use crate::lab::{LabAction, LabResult, LabStatus};
 use crate::rng::SeededRng;
 
 /// One applied call, as shown in the dashboard and the generated test.
@@ -70,6 +71,11 @@ pub trait Harness {
     fn branches(&self) -> Vec<&'static str> {
         Vec::new()
     }
+    /// Map a Replay lab action to a call on your contracts, or `None` if your
+    /// contracts have no equivalent (cases using it are skipped).
+    fn lab_op(&self, _state: &Self::State, _action: &LabAction) -> Option<Self::Op> {
+        None
+    }
 }
 
 /// A broken invariant, shrunk to the fewest calls that still break it.
@@ -92,12 +98,14 @@ pub struct Report {
     /// `(name, pack, held)` for every invariant.
     pub results: Vec<(&'static str, &'static str, bool)>,
     pub failures: Vec<Failure>,
+    /// Replay lab results, one per built-in case.
+    pub lab: Vec<LabResult>,
     pub elapsed: Duration,
 }
 
 /// Replay `ops` from a fresh state. Returns the steps and, if invariant `inv`
 /// broke, the index of the step after which it broke and the reason.
-fn replay<H: Harness>(h: &H, ops: &[H::Op], inv: &Invariant<H::State>) -> (Vec<Step>, Option<(usize, String)>) {
+pub(crate) fn replay_until<H: Harness>(h: &H, ops: &[H::Op], inv: &Invariant<H::State>) -> (Vec<Step>, Option<(usize, String)>) {
     let mut state = h.setup();
     let mut steps = Vec::with_capacity(ops.len());
     for (i, op) in ops.iter().enumerate() {
@@ -111,7 +119,7 @@ fn replay<H: Harness>(h: &H, ops: &[H::Op], inv: &Invariant<H::State>) -> (Vec<S
 
 /// Delta-debugging style shrink: drop chunks of calls while the invariant
 /// still breaks, halving the chunk size until single calls.
-fn shrink<H: Harness>(h: &H, mut ops: Vec<H::Op>, inv: &Invariant<H::State>) -> Vec<H::Op> {
+pub(crate) fn shrink_until<H: Harness>(h: &H, mut ops: Vec<H::Op>, inv: &Invariant<H::State>) -> Vec<H::Op> {
     let mut chunk = (ops.len() / 2).max(1);
     loop {
         let mut i = 0;
@@ -120,7 +128,7 @@ fn shrink<H: Harness>(h: &H, mut ops: Vec<H::Op>, inv: &Invariant<H::State>) -> 
             let end = (i + chunk).min(ops.len());
             let candidate: Vec<H::Op> = ops[..i].iter().chain(ops[end..].iter()).cloned().collect();
             if !candidate.is_empty() {
-                if let (_, Some((at, _))) = replay(h, &candidate, inv) {
+                if let (_, Some((at, _))) = replay_until(h, &candidate, inv) {
                     ops = candidate[..=at].to_vec();
                     removed = true;
                     continue;
@@ -158,6 +166,18 @@ pub fn run_with<H: Harness>(h: H, cfg: Config) -> Report {
     let reporter = crate::report::Reporter::start(&cfg, &seed_hex, invariants.len());
 
     let started = Instant::now();
+
+    // Replay lab first: a fifth of the budget, at most 20 seconds.
+    let lab_budget = (cfg.time / 5).min(Duration::from_secs(20));
+    let lab = crate::lab::run_lab(&h, &invariants, cfg.seed, lab_budget);
+    for r in &lab {
+        match r.status {
+            LabStatus::Broke => println!("soroquake: lab ✗ {} broke {} ({} variants)", r.case.id, r.invariant.unwrap_or(""), r.variants),
+            LabStatus::Held => println!("soroquake: lab ✓ {} held ({} variants)", r.case.id, r.variants),
+            LabStatus::Skipped => println!("soroquake: lab · {} skipped (not applicable)", r.case.id),
+        }
+    }
+
     let deadline = started + cfg.time;
     let mut master = SeededRng::new(cfg.seed);
     let mut seen: BTreeSet<String> = BTreeSet::new();
@@ -192,8 +212,8 @@ pub fn run_with<H: Harness>(h: H, cfg: Config) -> Report {
                 if let Check::Fail(_) = (inv.check)(&state) {
                     any_broke = true;
                     let before = ops.len();
-                    let small = shrink(&h, ops.clone(), inv);
-                    let (mut steps, fail) = replay(&h, &small, inv);
+                    let small = shrink_until(&h, ops.clone(), inv);
+                    let (mut steps, fail) = replay_until(&h, &small, inv);
                     let reason = fail.map(|(_, r)| r).unwrap_or_default();
                     if let Some(last) = steps.last_mut() {
                         last.note = reason.clone();
@@ -236,6 +256,7 @@ pub fn run_with<H: Harness>(h: H, cfg: Config) -> Report {
         coverage: coverage(&seen),
         results: invariants.iter().zip(&broken).map(|(i, b)| (i.name, i.pack, b.is_none())).collect(),
         failures: broken.into_iter().flatten().collect(),
+        lab,
         elapsed: started.elapsed(),
     };
 
@@ -243,9 +264,15 @@ pub fn run_with<H: Harness>(h: H, cfg: Config) -> Report {
     reporter.finish(&report);
 
     print_summary(&report);
-    if !report.failures.is_empty() {
+    let lab_broke: Vec<_> = report.lab.iter().filter(|r| r.status == LabStatus::Broke).map(|r| r.case.id).collect();
+    if !report.failures.is_empty() || !lab_broke.is_empty() {
         let names: Vec<_> = report.failures.iter().map(|f| f.invariant).collect();
-        panic!("soroquake: {} invariant(s) broke: {}", names.len(), names.join(", "));
+        panic!(
+            "soroquake: {} invariant(s) broke{}{}",
+            names.len(),
+            if names.is_empty() { String::new() } else { format!(": {}", names.join(", ")) },
+            if lab_broke.is_empty() { String::new() } else { format!("; lab cases broke: {}", lab_broke.join(", ")) },
+        );
     }
     report
 }
@@ -260,6 +287,12 @@ fn print_summary(r: &Report) {
     );
     for (name, pack, held) in &r.results {
         println!("  {} {name} ({pack})", if *held { "✓" } else { "✗" });
+    }
+    for l in r.lab.iter().filter(|l| l.status == LabStatus::Broke) {
+        println!("\n  lab {} — {}", l.case.id, l.reason);
+        for (i, s) in l.sequence.iter().enumerate() {
+            println!("    {}. {:<6} {:<24} {}", i + 1, s.who, s.call, s.note);
+        }
     }
     for f in &r.failures {
         println!("\n  {} — {}", f.invariant, f.reason);
@@ -321,7 +354,7 @@ mod tests {
     fn shrink_keeps_only_needed_calls() {
         let ops = vec![0, 2, 0, 0, 1, 0, 2, 0, 2];
         let inv = &Counter.invariants()[0];
-        let small = shrink(&Counter, ops, inv);
+        let small = shrink_until(&Counter, ops, inv);
         assert_eq!(small.iter().sum::<i64>(), 5);
         assert!(small.len() <= 3, "got {small:?}");
     }

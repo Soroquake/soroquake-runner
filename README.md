@@ -36,6 +36,13 @@ and `invariants`. Call `soroquake::run(YourHarness)` from a `#[test]`.
 soroquake = { git = "https://github.com/Nishu0/soroquake-runner", branch = "main" }
 ```
 
+## Replay lab
+
+Every campaign starts by replaying scripted attacks from well-known bug
+classes (share inflation, rounding direction, allowance overspend and more),
+then mutating them. Implement `Harness::lab_op` to map the generic
+`LabAction`s to calls on your contracts; cases you can't map are skipped.
+
 Settings come from the environment: `SOROQUAKE_TIME`, `SOROQUAKE_SEED`
 (replay a campaign), `SOROQUAKE_STEPS`, `SOROQUAKE_TOKEN`, `SOROQUAKE_API`.
 

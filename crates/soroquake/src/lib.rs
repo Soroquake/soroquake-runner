@@ -10,6 +10,7 @@
 pub mod campaign;
 pub mod check;
 pub mod config;
+pub mod lab;
 #[cfg(feature = "report")]
 mod report;
 pub mod rng;
@@ -17,6 +18,7 @@ pub mod rng;
 pub use campaign::{run, Failure, Harness, Invariant, Report, Step};
 pub use check::Check;
 pub use config::Config;
+pub use lab::{Actor, LabAction, LabCase, LabResult, LabStatus};
 pub use rng::SeededRng;
 
 /// Convenience re-exports for harness authors.
@@ -24,5 +26,6 @@ pub mod prelude {
     pub use crate::campaign::{run, Harness, Invariant, Step};
     pub use crate::check;
     pub use crate::check::Check;
+    pub use crate::lab::{Actor, LabAction};
     pub use crate::rng::SeededRng;
 }

@@ -78,6 +78,17 @@ impl Reporter {
                 "steps_after": f.sequence.len(),
                 "sequence": f.sequence.iter().map(|s| json!({ "who": s.who, "call": s.call, "note": s.note })).collect::<Vec<_>>(),
             })).collect::<Vec<_>>(),
+            "lab": r.lab.iter().map(|l| json!({
+                "case": l.case.id,
+                "title": l.case.title,
+                "class": l.case.class,
+                "summary": l.case.summary,
+                "status": l.status.as_str(),
+                "invariant": l.invariant.unwrap_or(""),
+                "reason": l.reason,
+                "variants": l.variants,
+                "sequence": l.sequence.iter().map(|s| json!({ "who": s.who, "call": s.call, "note": s.note })).collect::<Vec<_>>(),
+            })).collect::<Vec<_>>(),
         });
         match self.post(&format!("/v1/ingest/campaigns/{id}/finish"), body) {
             Ok(_) => println!("soroquake: campaign saved to the dashboard"),
