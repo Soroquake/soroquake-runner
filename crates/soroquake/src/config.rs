@@ -14,7 +14,7 @@ pub struct Config {
     /// `pr`, `push`, `nightly` or `local`, from GitHub Actions when present.
     pub trigger: String,
     pub branch: String,
-    /// Dashboard API base, e.g. `https://soroquake.dev/api`. `SOROQUAKE_API`.
+    /// Dashboard API base. `SOROQUAKE_API`, default `https://api.soroquake.dev`.
     pub api: String,
     /// Upload token. Reporting is skipped when empty. `SOROQUAKE_TOKEN`.
     pub token: String,
@@ -80,7 +80,7 @@ impl Config {
             trigger,
             branch,
             api: if api.is_empty() {
-                "https://soroquake.dev/api".into()
+                "https://api.soroquake.dev".into()
             } else {
                 api.trim_end_matches('/').to_string()
             },
