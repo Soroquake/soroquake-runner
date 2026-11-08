@@ -4,8 +4,9 @@
 //! Each case is written in generic actions ([`LabAction`]). Your harness maps
 //! them to concrete calls in [`crate::Harness::lab_op`]; cases that use an
 //! action your contracts don't have are skipped. The engine runs every case
-//! as written, then mutates it (amounts, extra random calls in between)
-//! because real exploits rarely match a textbook script exactly.
+//! as written, then mutates it (amounts, repeated steps) because real exploits
+//! rarely match a textbook script exactly. Mutations never add calls outside
+//! the script, so a broken case always points at its own pattern.
 
 use std::time::{Duration, Instant};
 
@@ -167,9 +168,15 @@ pub struct LabResult {
 }
 
 fn mutate(script: &[LabAction], rng: &mut SeededRng) -> Vec<LabAction> {
-    script
-        .iter()
-        .cloned()
+    let mut out: Vec<LabAction> = Vec::with_capacity(script.len() + 2);
+    for a in script {
+        out.push(a.clone());
+        // Repeat a step now and then: attacks are often the same call, looped.
+        if rng.chance(15) {
+            out.push(a.clone());
+        }
+    }
+    out.into_iter()
         .map(|mut a| {
             if let Some(amount) = a.amount_mut() {
                 if rng.chance(50) {
@@ -211,16 +218,13 @@ pub(crate) fn run_lab<H: Harness>(h: &H, invariants: &[Invariant<H::State>], see
             let mut state = h.setup();
             let mut ops: Vec<H::Op> = Vec::new();
             'steps: for action in &script {
-                // Mutations also slip ordinary random calls in between scripted ones.
-                let extra = if variants > 0 && rng.chance(20) { Some(h.generate(&state, &mut rng)) } else { None };
-                for op in extra.into_iter().chain(h.lab_op(&state, action)) {
-                    h.apply(&mut state, &op);
-                    ops.push(op);
-                    for (k, inv) in invariants.iter().enumerate() {
-                        if let Check::Fail(reason) = (inv.check)(&state) {
-                            broke = Some((k, ops.clone(), reason));
-                            break 'steps;
-                        }
+                let Some(op) = h.lab_op(&state, action) else { continue };
+                h.apply(&mut state, &op);
+                ops.push(op);
+                for (k, inv) in invariants.iter().enumerate() {
+                    if let Check::Fail(reason) = (inv.check)(&state) {
+                        broke = Some((k, ops.clone(), reason));
+                        break 'steps;
                     }
                 }
             }
